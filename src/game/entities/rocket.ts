@@ -1,5 +1,5 @@
 import { Vector } from "p5";
-import { p } from "../sketch";
+import { isDebug, p } from "../sketch";
 import {
   ROCKET_LIFESPAN,
   ROCKET_MAX_SPEED,
@@ -62,6 +62,15 @@ export class Rocket {
 
     for (const flame of this.flames) {
       flame.draw();
+    }
+
+    if (isDebug) {
+      p.push();
+      // Draw a circle with the lifespan
+      p.noFill();
+      p.stroke(0, 200, 0);
+      p.circle(this.pos.x, this.pos.y, this.r * 2);
+      p.pop();
     }
   }
 

@@ -39,7 +39,7 @@ export class GameState {
   public update(): void {
     // Check for level progression based on score
     const previousLevel = this.level;
-    this.level = Math.floor(this.score / 1000) + 1;
+    this.level = this.calcLevel(this.score);
 
     if (this.level !== previousLevel) {
       this.eventSystem.dispatchEvent(GameEvent.LEVEL_CHANGED, {
@@ -47,6 +47,33 @@ export class GameState {
         previousLevel,
       });
     }
+  }
+
+  public calcLevel(score: number): number {
+    let level = 1;
+    while (this.getLevelScorePoint(level) <= score) {
+      level++;
+    }
+    return level - 1;
+  }
+
+  public getLevelScorePoint(level: number): number {
+    // lv1: 0
+    // lv2: 550
+    // lv3: 1100
+    // ...
+    return (level - 1) * 500 + (level - 1) * 50;
+  }
+
+  public getLevelProgress(): number {
+    const currentLevel = this.getLevel();
+    const currentLevelScore = this.getLevelScorePoint(currentLevel);
+    const nextLevelScore = this.getLevelScorePoint(currentLevel + 1);
+
+    // Calculate progress as a value between 0 and 1
+    return (
+      (this.score - currentLevelScore) / (nextLevelScore - currentLevelScore)
+    );
   }
 
   public addScore(points: number): void {

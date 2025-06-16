@@ -52,6 +52,14 @@ export class Game {
     return this.p5;
   }
 
+  public getLevel() {
+    return this.gameState.getLevel();
+  }
+
+  public getScore() {
+    return this.gameState.getScore();
+  }
+
   keyboards() {
     const p = this.getP5();
 

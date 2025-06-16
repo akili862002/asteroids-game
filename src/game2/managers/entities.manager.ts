@@ -12,6 +12,8 @@ import {
   ASTEROID_MAX_GENERATE,
   ASTEROID_SPAWN_INTERVAL,
   MIN_SPAWN_DISTANCE,
+  ROCKET_MAX_GENERATE,
+  ROCKET_SPAWN_INTERVAL,
 } from "@/game/config";
 import { Rocket } from "../entities/rocket.entity";
 
@@ -19,6 +21,7 @@ export class EntitiesManager {
   game: Game;
   ship: Ship;
   entities: Entity[] = [];
+  lastSpawnedRocketTime = 0;
 
   constructor(game: Game) {
     this.entities = [];
@@ -26,13 +29,33 @@ export class EntitiesManager {
     this.ship = new Ship(this.game);
     this.addEntity(this.ship);
 
-    this.createAsteroids();
-    this.createRockets();
-    this.createRockets();
-    this.createRockets();
+    this.createInitialAsteroids();
+    this.createRocket();
+    this.createRocket();
+    this.createRocket();
+    this.createRocket();
   }
 
-  createAsteroids() {
+  update() {
+    for (let entity of this.entities) {
+      entity.update();
+
+      // Clean up
+      if (entity.shouldRemove()) {
+        this.removeEntity(entity);
+      }
+    }
+    this.spawnAsteroid();
+    this.spawnRocket();
+  }
+
+  draw() {
+    for (let entity of this.entities) {
+      entity.draw();
+    }
+  }
+
+  createInitialAsteroids() {
     const count = 8;
 
     for (let i = 0; i < count; i++) {
@@ -40,7 +63,7 @@ export class EntitiesManager {
     }
   }
 
-  createRockets() {
+  createRocket() {
     const p = this.game.getP5();
 
     const rocket = new Rocket(this.game, {
@@ -75,30 +98,34 @@ export class EntitiesManager {
     this.addEntity(asteroid);
   }
 
+  private spawnRocket() {
+    const p = this.game.getP5();
+    // Calculate adjusted spawn interval based on level
+    const adjustedRocketSpawnInterval =
+      ROCKET_SPAWN_INTERVAL - this.game.gameState.getLevel() * 60;
+
+    // Check if enough time has passed since last rocket spawn
+    const isSpawnTimeElapsed =
+      p.frameCount - this.lastSpawnedRocketTime >
+      Math.max(60, adjustedRocketSpawnInterval);
+
+    if (!this.ship.isDead && this.game.getLevel() >= 2 && isSpawnTimeElapsed) {
+      this.createRocket();
+      this.lastSpawnedRocketTime = p.frameCount;
+    }
+  }
+
   private spawnAsteroid() {
+    const p = this.game.getP5();
+    const asteroidCount = this.entities.filter(
+      (e) => e instanceof Asteroid
+    ).length;
+
     if (
-      this.game.getP5().frameCount % ASTEROID_SPAWN_INTERVAL === 0 &&
-      this.entities.length < ASTEROID_MAX_GENERATE
+      p.frameCount % ASTEROID_SPAWN_INTERVAL === 0 &&
+      asteroidCount < ASTEROID_MAX_GENERATE
     ) {
       this.createAsteroid();
-    }
-  }
-
-  update() {
-    for (let entity of this.entities) {
-      entity.update();
-
-      // Clean up
-      if (entity.shouldRemove()) {
-        this.removeEntity(entity);
-      }
-    }
-    this.spawnAsteroid();
-  }
-
-  draw() {
-    for (let entity of this.entities) {
-      entity.draw();
     }
   }
 
@@ -151,128 +178,172 @@ export class EntitiesManager {
   }
 
   collision(entityA: Entity, entityB: Entity) {
-    const p = this.game.getP5();
     const isBothAsteroids =
       entityA instanceof Asteroid && entityB instanceof Asteroid;
-
-    if (isBothAsteroids) {
-      const asteroidA = entityA.getExtension(CollisionalExtension);
-      const asteroidB = entityB.getExtension(CollisionalExtension);
-      asteroidA.collision(asteroidB);
-      return;
-    }
-
     const isBulletAsteroid =
       (entityA instanceof Bullet && entityB instanceof Asteroid) ||
       (entityB instanceof Bullet && entityA instanceof Asteroid);
-
-    if (isBulletAsteroid) {
-      const bullet = entityA instanceof Bullet ? entityA : (entityB as Bullet);
-      const asteroid =
-        entityA instanceof Asteroid ? entityA : (entityB as Asteroid);
-
-      const asteroidTransformable = asteroid.getExtension(
-        TransformableExtension
-      );
-      const bulletTransformable = bullet.getExtension(TransformableExtension);
-      const points = Math.floor(100 / asteroidTransformable.radius) * 15;
-      this.game.gameState.addScore(points);
-
-      const pointIndicator = new PointIndicator(this.game, {
-        text: `+${points}`,
-        position: asteroidTransformable.position,
-        size: 16,
-        color: p.color("#00e7ff"),
-      });
-      this.addEntity(pointIndicator);
-
-      this.removeEntity(bullet);
-      this.removeEntity(asteroid);
-      const newAsteroids = asteroid.split(bullet);
-      for (let asteroid of newAsteroids) {
-        this.addEntity(asteroid);
-      }
-
-      // Create explosion effect
-      this.createExplosion(
-        bulletTransformable.position.copy(),
-        bulletTransformable.velocity.copy().limit(5),
-        100,
-        p.color("#FDC271")
-      );
-
-      return;
-    }
-
+    const isBulletRocket =
+      (entityA instanceof Bullet && entityB instanceof Rocket) ||
+      (entityB instanceof Bullet && entityA instanceof Rocket);
     const isShipAsteroid =
       (entityA instanceof Ship && entityB instanceof Asteroid) ||
       (entityB instanceof Ship && entityA instanceof Asteroid);
-
-    if (isShipAsteroid && !this.ship.isDead && !this.ship.invincible) {
-      const ship = entityA instanceof Ship ? entityA : (entityB as Ship);
-      const asteroid =
-        entityA instanceof Asteroid ? entityA : (entityB as Asteroid);
-
-      if (ship.isDead || ship.invincible) return;
-
-      const force = asteroid.getExtension(TransformableExtension).velocity;
-      this.destroyShip(ship, force.copy());
-      this.removeEntity(asteroid);
-    }
-
     const isShipRocket =
       (entityA instanceof Ship && entityB instanceof Rocket) ||
       (entityB instanceof Ship && entityA instanceof Rocket);
-
-    if (isShipRocket) {
-      const ship = entityA instanceof Ship ? entityA : (entityB as Ship);
-      const rocket = entityA instanceof Rocket ? entityA : (entityB as Rocket);
-
-      if (ship.isDead || ship.invincible) return;
-
-      const force = rocket
-        .getExtension(TransformableExtension)
-        .velocity.copy()
-        .add(ship.getVelocity().copy())
-        .setMag(rocket.getExtension(TransformableExtension).velocity.mag());
-
-      this.destroyShip(ship, force);
-      this.removeEntity(rocket);
-    }
-
     const isRocketAsteroid =
       (entityA instanceof Rocket && entityB instanceof Asteroid) ||
       (entityB instanceof Rocket && entityA instanceof Asteroid);
 
-    if (isRocketAsteroid) {
-      const rocket = entityA instanceof Rocket ? entityA : (entityB as Rocket);
-      const asteroid =
-        entityA instanceof Asteroid ? entityA : (entityB as Asteroid);
-
-      const asteroidTransformable = asteroid.getExtension(
-        TransformableExtension
+    if (isBothAsteroids) {
+      this.handleAsteroidAsteroidCollision(
+        entityA as Asteroid,
+        entityB as Asteroid
       );
-      const rocketTransformable = rocket.getExtension(TransformableExtension);
-
-      this.removeEntity(rocket);
-      this.removeEntity(asteroid);
-
-      const newAsteroids = asteroid.split(rocket);
-      for (let asteroid of newAsteroids) {
-        this.addEntity(asteroid);
-      }
-
-      const force = asteroidTransformable.velocity
-        .copy()
-        .add(rocketTransformable.velocity.copy());
-
-      this.createExplosion(
-        asteroidTransformable.position.copy(),
-        force.limit(6),
-        100,
-        p.color("#FDC271")
-      );
+    } else if (isBulletAsteroid) {
+      this.handleBulletAsteroidCollision(entityA, entityB);
+    } else if (isBulletRocket) {
+      this.handleBulletRocketCollision(entityA, entityB);
+    } else if (isShipAsteroid) {
+      this.handleShipAsteroidCollision(entityA, entityB);
+    } else if (isShipRocket) {
+      this.handleShipRocketCollision(entityA, entityB);
+    } else if (isRocketAsteroid) {
+      this.handleRocketAsteroidCollision(entityA, entityB);
     }
+  }
+
+  private handleAsteroidAsteroidCollision(
+    asteroidA: Asteroid,
+    asteroidB: Asteroid
+  ) {
+    const colliderA = asteroidA.getExtension(CollisionalExtension);
+    const colliderB = asteroidB.getExtension(CollisionalExtension);
+    colliderA.collision(colliderB);
+  }
+
+  private handleBulletAsteroidCollision(entityA: Entity, entityB: Entity) {
+    const p = this.game.getP5();
+    const bullet = entityA instanceof Bullet ? entityA : (entityB as Bullet);
+    const asteroid =
+      entityA instanceof Asteroid ? entityA : (entityB as Asteroid);
+
+    const asteroidTransformable = asteroid.getExtension(TransformableExtension);
+    const bulletTransformable = bullet.getExtension(TransformableExtension);
+    const points = Math.floor(100 / asteroidTransformable.radius) * 15;
+    this.game.gameState.addScore(points);
+
+    const pointIndicator = new PointIndicator(this.game, {
+      text: `+${points}`,
+      position: asteroidTransformable.position,
+      size: 16,
+      color: p.color("#00e7ff"),
+    });
+    this.addEntity(pointIndicator);
+
+    this.removeEntity(bullet);
+    this.removeEntity(asteroid);
+    const newAsteroids = asteroid.split(bullet);
+    for (let asteroid of newAsteroids) {
+      this.addEntity(asteroid);
+    }
+
+    // Create explosion effect
+    this.createExplosion(
+      bulletTransformable.position.copy(),
+      bulletTransformable.velocity.copy().limit(5),
+      100,
+      p.color("#FDC271")
+    );
+  }
+
+  private handleBulletRocketCollision(entityA: Entity, entityB: Entity) {
+    const p = this.game.getP5();
+    const bullet = entityA instanceof Bullet ? entityA : (entityB as Bullet);
+    const rocket = entityA instanceof Rocket ? entityA : (entityB as Rocket);
+
+    const bulletTransformable = bullet.getExtension(TransformableExtension);
+    const rocketTransformable = rocket.getExtension(TransformableExtension);
+
+    // Award points for destroying a rocket
+    const points = 150;
+    this.game.gameState.addScore(points);
+
+    const pointIndicator = new PointIndicator(this.game, {
+      text: `+${points}`,
+      position: rocketTransformable.position,
+      size: 16,
+      color: p.color("#00e7ff"),
+    });
+    this.addEntity(pointIndicator);
+
+    this.removeEntity(bullet);
+    this.removeEntity(rocket);
+
+    this.createExplosion(
+      rocketTransformable.position.copy(),
+      bulletTransformable.velocity.copy().setMag(5),
+      150,
+      p.color("#FF6B6B")
+    );
+  }
+
+  private handleShipAsteroidCollision(entityA: Entity, entityB: Entity) {
+    if (this.ship.isDead || this.ship.invincible) return;
+
+    const ship = entityA instanceof Ship ? entityA : (entityB as Ship);
+    const asteroid =
+      entityA instanceof Asteroid ? entityA : (entityB as Asteroid);
+
+    const force = asteroid.getExtension(TransformableExtension).velocity;
+    this.destroyShip(ship, force.copy());
+    this.removeEntity(asteroid);
+  }
+
+  private handleShipRocketCollision(entityA: Entity, entityB: Entity) {
+    const ship = entityA instanceof Ship ? entityA : (entityB as Ship);
+    const rocket = entityA instanceof Rocket ? entityA : (entityB as Rocket);
+
+    if (ship.isDead || ship.invincible) return;
+
+    const force = rocket
+      .getExtension(TransformableExtension)
+      .velocity.copy()
+      .add(ship.getVelocity().copy())
+      .setMag(rocket.getExtension(TransformableExtension).velocity.mag());
+
+    this.destroyShip(ship, force);
+    this.removeEntity(rocket);
+  }
+
+  private handleRocketAsteroidCollision(entityA: Entity, entityB: Entity) {
+    const p = this.game.getP5();
+    const rocket = entityA instanceof Rocket ? entityA : (entityB as Rocket);
+    const asteroid =
+      entityA instanceof Asteroid ? entityA : (entityB as Asteroid);
+
+    const asteroidTransformable = asteroid.getExtension(TransformableExtension);
+    const rocketTransformable = rocket.getExtension(TransformableExtension);
+
+    this.removeEntity(rocket);
+    this.removeEntity(asteroid);
+
+    const newAsteroids = asteroid.split(rocket);
+    for (let asteroid of newAsteroids) {
+      this.addEntity(asteroid);
+    }
+
+    const force = asteroidTransformable.velocity
+      .copy()
+      .add(rocketTransformable.velocity.copy());
+
+    this.createExplosion(
+      asteroidTransformable.position.copy(),
+      force.limit(6),
+      100,
+      p.color("#FDC271")
+    );
   }
 
   destroyShip(ship: Ship, force: Vector) {

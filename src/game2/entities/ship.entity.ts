@@ -5,7 +5,6 @@ import { Entities, Entity } from "./entity";
 import { CollisionalExtension } from "../extensions/collisional.ext";
 import { DEBUG, SHIP_BOOST_FORCE, SHIP_INVINCIBLE_TIME } from "@/game/config";
 import { Bullet } from "./bullet.entity";
-import { Flame } from "./flame.entity";
 import { FlammableExtension } from "../extensions/flammable.ext";
 
 export class Ship extends Entity {

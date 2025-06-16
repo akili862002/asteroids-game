@@ -3,6 +3,7 @@ import { Game } from "../game";
 import { Entities, Entity, IEntity } from "./entity";
 import { TransformableExtension } from "../extensions/transformable.ext";
 import {
+  DEBUG,
   ROCKET_LIFESPAN,
   ROCKET_MAX_SPEED,
   ROCKET_STEER_FORCE,
@@ -26,7 +27,7 @@ export class Rocket extends Entity implements IEntity {
     }
   ) {
     super(game, Entities.FLAME);
-    const radius = 4;
+    const radius = 6;
     this.lifespan = args.lifespan || ROCKET_LIFESPAN;
     this.allowLaunch = false;
     const p5 = game.getP5();
@@ -72,8 +73,6 @@ export class Rocket extends Entity implements IEntity {
 
     p.push();
     p.translate(pos.x, pos.y);
-    const angle = vel.heading() + p.PI / 2;
-    p.rotate(angle);
 
     if (!this.allowLaunch) {
       const pulseAmount = p.sin(p.frameCount * 0.1);
@@ -83,12 +82,34 @@ export class Rocket extends Entity implements IEntity {
 
       p.fill(255, 69, 90, alpha);
       p.circle(0, 0, circleSize);
+
+      p.textSize(10);
+      p.textAlign(p.CENTER);
+      p.fill(252, 81, 81, alpha + 100);
+      p.text("Warning", 35, 35);
+      p.noFill();
+      p.stroke(252, 81, 81, alpha + 100);
+      p.rect(5, 21, 60, 20, 3);
     }
 
+    if (this.lifespan < 3 * 60 && p.frameCount % 10 < 5) {
+      p.tint(255, 150);
+    }
+
+    const angle = vel.heading() + p.PI / 2;
+    p.rotate(angle);
     p.imageMode(p.CENTER);
     p.image(this.rocketImg, 0, 0, 30, 30);
 
     p.pop();
+
+    if (DEBUG) {
+      p.push();
+      p.noFill();
+      p.stroke(0, 0, 255);
+      p.circle(pos.x, pos.y, transformable.radius * 2);
+      p.pop();
+    }
   }
 
   tracking(target: Vector) {
@@ -116,7 +137,7 @@ export class Rocket extends Entity implements IEntity {
     const pos = transformable
       .getStates()
       .pos.copy()
-      .add(Vector.fromAngle(vel.heading() + p.PI).mult(r * r));
+      .add(Vector.fromAngle(vel.heading() + p.PI).mult(r + 2));
 
     flammable.createFlames(pos, vel, vel.heading());
   }

@@ -1,6 +1,5 @@
 import { Game } from "../game";
 import { HUDComponent } from "./hud";
-import { POINTS_PER_LEVEL } from "@/game/config";
 
 export class LevelHUD implements HUDComponent {
   game: Game;
@@ -13,8 +12,7 @@ export class LevelHUD implements HUDComponent {
   }
 
   public update(): void {
-    this.targetProgress =
-      (this.game.gameState.getScore() % POINTS_PER_LEVEL) / POINTS_PER_LEVEL;
+    this.targetProgress = this.game.gameState.getLevelProgress();
 
     this.currentProgress +=
       (this.targetProgress - this.currentProgress) * this.easeSpeed;
